@@ -1,5 +1,8 @@
 from sleeperpy import *
 import pprint
+import sleeper_wrapper
+import pickle
+from datetime import date
 
 # Initialize pretty printer
 pp = pprint.PrettyPrinter()
@@ -38,6 +41,41 @@ def calculate_close_score_factor(head_to_head):
     point_difference = abs(points_0 - points_1)
     return 1 / (point_difference + 1)
 
+# Function to get player ids from a roster_id
+def get_player_ids(roster_id, matchups):
+    output = None
+
+    for matchup in matchups:
+        if matchup['roster_id'] == roster_id:
+            output = matchup['players']
+
+    return output
+
+# Function to get starter ids from a roster_id
+def get_starter_ids(roster_id, matchups):
+    output = None
+
+    for matchup in matchups:
+        if matchup['roster_id'] == roster_id:
+            output = matchup['starters']
+
+    return output
+
+# Function to get all players
+# Only connects to Sleeper once per day
+def get_all_players():
+    today_string = date.today().strftime("%y%m%d")
+    try:
+        with open(f'players_data/{today_string}_players', 'rb') as f:
+            players_dict = pickle.load(f)
+            return players_dict
+    except:
+        players_wrapper = sleeper_wrapper.Players()
+        players_dict = players_wrapper.get_all_players()
+        with open(f'players_data/{today_string}_players', 'wb') as f:
+            pickle.dump(players_dict, f)
+        return players_dict
+
 def main():
     league_id = "916453080278011904"  # Replace with your actual league ID
 
@@ -45,7 +83,8 @@ def main():
     week = safe_api_call(Leagues.get_state, 'nfl')['week']
     matchups = safe_api_call(Leagues.get_matchups, league_id, week=week)
     users = safe_api_call(Leagues.get_users, league_id)
-    rosters = safe_api_call(Leagues.get_rosters, league_id)
+    rosters = safe_api_call(Leagues.get_rosters, league_id)    
+    players = get_all_players()
 
     if not (league and week and matchups and users and rosters):
         print("Failed to fetch required data.")
@@ -78,8 +117,17 @@ def main():
     for head_to_head in scoreboard:
         close_score_factor = calculate_close_score_factor(head_to_head)
         head_to_head['close_score_factor'] = close_score_factor
+        team_a_starter_ids = get_starter_ids(head_to_head['team_a']['roster_id'], matchups)
+        team_a_players = []r
 
-    pp.pprint(scoreboard)
+        print(head_to_head['team_a']['display_name'])
+        for id in team_a_starter_ids:
+            team_a_players.append(players[id])
+            pp.pprint(players[id]['full_name'])
 
+        # team_b_starter_ids = get_starter_ids(head_to_head['team_b']['roster_id'], matchups)
+
+        break
+ 
 if __name__ == "__main__":
     main()
