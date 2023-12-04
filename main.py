@@ -3,6 +3,7 @@ import pprint
 import sleeper_wrapper
 import pickle
 from datetime import date
+import requests
 
 # Initialize pretty printer
 pp = pprint.PrettyPrinter()
@@ -75,6 +76,32 @@ def get_all_players():
         with open(f'players_data/{today_string}_players', 'wb') as f:
             pickle.dump(players_dict, f)
         return players_dict
+    
+def find_matchup_roster(matchups, matchup_id, roster_id):
+    for matchup in matchups:
+        matchup_id_match = matchup['matchup_id']
+        roster_id_match = matchup['roster_id']
+
+        if matchup_id_match == matchup_id and roster_id_match == roster_id:
+            return matchup
+    return None
+
+def find_matchup_starter_points(matchup, player_id):
+    for starter, starter_points in zip(matchup['starters'], matchup['starters_points']):
+        if starter == player_id:
+            return starter_points
+    return None
+
+def construct_team_players(starter_ids, matchup, players):
+    team_players = []
+    players_keys = ['first_name', 'last_name', 'full_name', 'team', 'player_id', 'position', 'number']
+    
+    for player_id in starter_ids:
+        player = {key: players[player_id][key] for key in players_keys}
+        player['points'] = find_matchup_starter_points(matchup, player_id)
+        team_players.append(player)
+
+    return team_players
 
 def main():
     league_id = "916453080278011904"  # Replace with your actual league ID
@@ -117,16 +144,18 @@ def main():
     for head_to_head in scoreboard:
         close_score_factor = calculate_close_score_factor(head_to_head)
         head_to_head['close_score_factor'] = close_score_factor
+
         team_a_starter_ids = get_starter_ids(head_to_head['team_a']['roster_id'], matchups)
-        team_a_players = []r
+        team_a_matchup = find_matchup_roster(matchups, head_to_head['team_a']['matchup_id'], head_to_head['team_a']['roster_id'])
 
-        print(head_to_head['team_a']['display_name'])
-        for id in team_a_starter_ids:
-            team_a_players.append(players[id])
-            pp.pprint(players[id]['full_name'])
+        head_to_head['team_a']['players'] = construct_team_players(team_a_starter_ids, team_a_matchup, players)
 
-        # team_b_starter_ids = get_starter_ids(head_to_head['team_b']['roster_id'], matchups)
+        team_b_starter_ids = get_starter_ids(head_to_head['team_b']['roster_id'], matchups)
+        team_b_matchup = find_matchup_roster(matchups, head_to_head['team_b']['matchup_id'], head_to_head['team_b']['roster_id'])
 
+        head_to_head['team_b']['players'] = construct_team_players(team_b_starter_ids, team_b_matchup, players)
+
+        pp.pprint(head_to_head)
         break
  
 if __name__ == "__main__":
