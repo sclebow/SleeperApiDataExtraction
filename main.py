@@ -137,7 +137,23 @@ def get_player_projected_points(player_id, week, year, scoring_settings):
     projected_points = calculate_projected_points(week_projected_stats, scoring_settings)
     return projected_points
 
+# Calculte a factor to indicate more points scored than projected for each team                
+def calculate_score_factor(scored_points, projected_points):
+    if scored_points == projected_points:
+        return 0.0
+    elif scored_points < projected_points:
+        return -1.0 * (projected_points - scored_points) / projected_points
+    else:
+        return (scored_points - projected_points) / projected_points
+
 def main():
+    """
+    Extracts data from the Sleeper API for a given league and week,
+    and calculates various statistics for each matchup.
+
+    Returns:
+        None
+    """
     league_id = "916453080278011904"  # Replace with your actual league ID
 
     league = safe_api_call(Leagues.get_league, league_id)
@@ -186,6 +202,9 @@ def main():
 
         head_to_head['team_a']['players'] = construct_team_players(team_a_starter_ids, team_a_matchup, players)
 
+        for player in head_to_head['team_a']['players']:
+            player['projected_points'] = get_player_projected_points(player['player_id'], week, year, scoring_settings)
+
         team_b_starter_ids = get_starter_ids(head_to_head['team_b']['roster_id'], matchups)
         team_b_matchup = find_matchup_roster(matchups, head_to_head['team_b']['matchup_id'], head_to_head['team_b']['roster_id'])
 
@@ -194,8 +213,17 @@ def main():
         for player in head_to_head['team_b']['players']:
             player['projected_points'] = get_player_projected_points(player['player_id'], week, year, scoring_settings)
 
+        team_a_scored_points = sum(player['points'] for player in head_to_head['team_a']['players'])
+        team_a_projected_points = sum(player['projected_points'] for player in head_to_head['team_a']['players'])
+        head_to_head['team_a']['score_factor'] = calculate_score_factor(team_a_scored_points, team_a_projected_points)
+
+        team_b_scored_points = sum(player['points'] for player in head_to_head['team_b']['players'])
+        team_b_projected_points = sum(player['projected_points'] for player in head_to_head['team_b']['players'])
+        head_to_head['team_b']['score_factor'] = calculate_score_factor(team_b_scored_points, team_b_projected_points)
+        
+        head_to_head['projected_score_factor'] = head_to_head['team_a']['score_factor'] + head_to_head['team_b']['score_factor']
         pp.pprint(head_to_head)
-        break
+        
  
 if __name__ == "__main__":
     main()
