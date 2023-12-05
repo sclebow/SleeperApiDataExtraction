@@ -103,15 +103,51 @@ def construct_team_players(starter_ids, matchup, players):
 
     return team_players
 
+def get_url_response(url):
+    # Perform the GET request
+    response = requests.get(url)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        # Parse the response JSON
+        data = response.json()
+        return data
+    else:
+        print(f"Failed to fetch data: Status code {response.status_code}")
+        return None
+
+def generate_projected_stats_url(player_id, year):
+    return f'https://api.sleeper.com/projections/nfl/player/{str(player_id)}?season_type=regular&season={str(year)}&grouping=week'
+
+def calculate_projected_points(week_projected_stats, scoring_settings):
+    keys = list(week_projected_stats.keys())
+    points = 0
+    for key in keys:
+        try:
+            projected_key = week_projected_stats[key]
+            score_key = scoring_settings[key]
+            projected_points = projected_key * score_key
+            points += projected_points
+        except: pass
+    return points
+
+def get_player_projected_points(player_id, week, year, scoring_settings):
+    url = generate_projected_stats_url(player_id, year)
+    week_projected_stats = get_url_response(url)[str(week)]['stats']
+    projected_points = calculate_projected_points(week_projected_stats, scoring_settings)
+    return projected_points
+
 def main():
     league_id = "916453080278011904"  # Replace with your actual league ID
 
     league = safe_api_call(Leagues.get_league, league_id)
     week = safe_api_call(Leagues.get_state, 'nfl')['week']
+    year = safe_api_call(Leagues.get_state, 'nfl')['season']
     matchups = safe_api_call(Leagues.get_matchups, league_id, week=week)
     users = safe_api_call(Leagues.get_users, league_id)
     rosters = safe_api_call(Leagues.get_rosters, league_id)    
     players = get_all_players()
+    scoring_settings = league['scoring_settings']
 
     if not (league and week and matchups and users and rosters):
         print("Failed to fetch required data.")
@@ -154,6 +190,9 @@ def main():
         team_b_matchup = find_matchup_roster(matchups, head_to_head['team_b']['matchup_id'], head_to_head['team_b']['roster_id'])
 
         head_to_head['team_b']['players'] = construct_team_players(team_b_starter_ids, team_b_matchup, players)
+
+        for player in head_to_head['team_b']['players']:
+            player['projected_points'] = get_player_projected_points(player['player_id'], week, year, scoring_settings)
 
         pp.pprint(head_to_head)
         break
